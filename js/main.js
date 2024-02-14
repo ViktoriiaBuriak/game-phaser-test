@@ -27,6 +27,12 @@ function preload() {
     frameWidth: 32,
     frameHeight: 48,
   });
+
+  this.load.audio('bg', './audio/background.mp3');
+  this.load.audio('gameOver', './audio/game-over.mp3');
+  this.load.audio('jump', './audio/jump.mp3');
+  this.load.audio('collectStar', './audio/star.mp3');
+  this.load.audio('win', './audio/win.mp3');
 }
 
 let platforms;
@@ -36,10 +42,17 @@ let stars;
 let score = 0;
 let scoreText;
 
+let level = 1;
+let levelText;
+
 let bombs;
+let bgMusic;
 
 function create() {
   this.add.image(400, 300, 'sky');
+
+  bgMusic = this.sound.add('bg');
+  bgMusic.play();
 
   platforms = this.physics.add.staticGroup();
 
@@ -90,6 +103,11 @@ function create() {
 
   this.physics.add.overlap(player, stars, collectStar, null, this);
 
+  levelText = this.add.text(16, 50, 'level: ' + level, {
+    fontSize: '32px',
+    fill: '#000',
+  });
+
   scoreText = this.add.text(16, 16, 'score: 0', {
     fontSize: '32px',
     fill: '#000',
@@ -100,6 +118,69 @@ function create() {
   this.physics.add.collider(bombs, platforms);
 
   this.physics.add.collider(player, bombs, hitBomb, null, this);
+
+  const width = this.cameras.main.width;
+
+  const pauseButton = this.add
+    .text(width - 16, 16, '\u2758 \u2758 Pause', {
+      fontSize: '24px',
+      fill: '#fff',
+    })
+    .setOrigin(1, 0);
+  pauseButton.setInteractive();
+
+  pauseButton.on(
+    'pointerup',
+    () => {
+      this.physics.pause();
+      this.anims.pauseAll();
+      this.sound.pauseAll();
+      pauseButton.visible = false;
+      playButton.visible = true;
+    },
+    this
+  );
+
+  this.input.keyboard.on(
+    'keydown-SPACE',
+    () => {
+      if (!this.physics.world.isPaused) {
+        this.physics.pause();
+        this.anims.pauseAll();
+        this.sound.pauseAll();
+        pauseButton.visible = false;
+        playButton.visible = true;
+      } else {
+        this.physics.resume();
+        this.anims.resumeAll();
+        this.sound.resumeAll();
+        pauseButton.visible = true;
+        playButton.visible = false;
+      }
+    },
+    this
+  );
+
+  const playButton = this.add
+    .text(width - 16, 16, '\u25B6 Play', {
+      fontSize: '24px',
+      fill: '#fff',
+    })
+    .setOrigin(1, 0);
+  playButton.visible = false;
+  playButton.setInteractive();
+
+  playButton.on(
+    'pointerup',
+    () => {
+      this.physics.resume();
+      this.anims.resumeAll();
+      this.sound.resumeAll();
+      playButton.visible = false;
+      pauseButton.visible = true;
+    },
+    this
+  );
 }
 
 let cursors;
@@ -122,29 +203,55 @@ function update() {
 
   if (cursors.up.isDown && player.body.touching.down) {
     player.setVelocityY(-330);
+
+    this.sound.play('jump');
   }
 }
 
 function collectStar(player, star) {
   star.disableBody(true, true);
 
+  this.sound.play('collectStar');
+
   score += 10;
-  scoreText.setText('Score: ' + score);
+  scoreText.setText('score: ' + score);
 
   if (stars.countActive(true) === 0) {
     stars.children.iterate(function (child) {
       child.enableBody(true, child.x, 0, true, true);
     });
 
-    const x =
-      player.x < 400
-        ? Phaser.Math.Between(400, 800)
-        : Phaser.Math.Between(0, 400);
+    level++;
+    levelText.setText('level: ' + level);
 
-    const bomb = bombs.create(x, 16, 'bomb');
-    bomb.setBounce(1);
-    bomb.setCollideWorldBounds(true);
-    bomb.setVelocity(Phaser.Math.Between(-200, 200), 20);
+    if (level === 10) {
+      const winText = this.add.text(400, 300, 'You Win!', {
+        fontSize: '48px',
+        fill: '#00ff00',
+      });
+      winText.setOrigin(0.5);
+
+      bgMusic.stop();
+
+      this.sound.play('win');
+
+      setTimeout(() => {
+        this.scene.restart();
+      }, 2000);
+
+      level = 1;
+      score = 0;
+    } else {
+      const x =
+        player.x < 400
+          ? Phaser.Math.Between(400, 800)
+          : Phaser.Math.Between(0, 400);
+
+      const bomb = bombs.create(x, 16, 'bomb');
+      bomb.setBounce(1);
+      bomb.setCollideWorldBounds(true);
+      bomb.setVelocity(Phaser.Math.Between(-200, 200), 20);
+    }
   }
 }
 
@@ -165,11 +272,15 @@ function hitBomb(player, bomb) {
   });
   gameOverText.setOrigin(0.5);
 
-  setTimeout(function () {
+  bgMusic.stop();
+
+  this.sound.play('gameOver');
+
+  setTimeout(() => {
     gameOverText.destroy();
+    this.scene.restart();
   }, 2000);
 
-  setTimeout(function () {
-    window.location.reload();
-  }, 2000);
+  level = 1;
+  score = 0;
 }
